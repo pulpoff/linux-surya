@@ -40,6 +40,19 @@ Touchscreen and display
   then read its size and first byte. This faulted in the download worker at boot and could hang
   the phone.
 
+Charging: USB-C power delivery
+------------------------------
+
+* **The port can sink power.** The connector was declared source-only with no `sink-pdos`, so
+  the phone had nothing to request from a PD charger. Each time, the request failed, the charger
+  sent a hard reset about 30 ms later and dropped VBUS, and charging kept starting and stopping.
+  The port is now dual-role (`try-power-role = "sink"`) with a 5 V / 3 A sink PDO, and PD chargers
+  hold a 5 V contract.
+* **Limits:** the device tree keeps the charger input at 1.5 A, and the driver fixes the battery
+  charge current at 1.95 A. The input limit (`current_max`) can be raised from userspace, for
+  example by a temperature-guarded service. 9 V PD needs driver work. The 33 W fast charging
+  uses an external charge pump with no mainline driver.
+
 Cameras: CAMSS and sensors
 --------------------------
 
