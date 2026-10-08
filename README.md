@@ -53,6 +53,22 @@ Charging: USB-C power delivery
   example by a temperature-guarded service. 9 V PD needs driver work. The 33 W fast charging
   uses an external charge pump with no mainline driver.
 
+Vibration: AW8624 haptics
+-------------------------
+
+* **The phone vibrates.** Its haptics chip is an Awinic AW8624, which the `aw8695-haptics` driver
+  accepted by chip ID only. The driver's setup is for the AW8695: boost, analog trim and f0
+  calibration. On the AW8624 those addresses are other registers (there is no boost), and writing
+  them held the chip in under-voltage lockout. It fell back to standby the moment it was made
+  active, so every effect ran with GO set and the motor never moved. For the AW8624 the driver now
+  stops after the interrupt and PWM setup, leaves the boost bits alone, polls `GLB_STATE` at its
+  own address (0x47), and plays a sine at the motor's resonance (24 kHz / 117 = 205 Hz).
+* **Strength.** The rumble magnitude sets the AW8624's RAM playback gain (`DATDBG`, 0x3b), so
+  softer effects play softer, and feedbackd's `max-haptic-strength` setting controls how strongly
+  the phone vibrates.
+* Pulses closer than about 150 ms apart blur together: the motor keeps ringing for that long after
+  each pulse.
+
 Wi-Fi: 5 GHz channels
 ---------------------
 

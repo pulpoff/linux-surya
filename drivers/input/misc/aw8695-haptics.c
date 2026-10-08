@@ -335,6 +335,10 @@
 #define AW8695_RAMDATA				0x42
 
 #define AW8695_GLB_STATE			0x46
+#define AW8624_GLB_STATE			0x47
+/* AW8624 RAM playback gain: 0x80 plays the waveform at full scale */
+#define AW8624_DATDBG				0x3b
+#define AW8624_GAIN_FULL			0x80
 
 #define AW8695_BST_AUTO				0x47
 #define AW8695_BST_AUTO_BST_AUTOSW_MASK		GENMASK(2, 2)
@@ -502,6 +506,7 @@ struct aw8695_data {
 	struct regmap *regmap;
 	struct gpio_desc *reset_gpio;
 	bool running;
+	u16 level;
 	struct work_struct play_work;
 	/* Parameters from devicetree */
 	u32 f0_preset;
@@ -517,6 +522,8 @@ struct aw8695_data {
 	u8 r_spare;
 	u32 bemf_vthh;
 	u32 bemf_vthl;
+	/* AW8624 (POCO X3 NFC): no boost, GLB_STATE at 0x47, no f0 calibration here */
+	bool aw8624;
 };
 
 /*
@@ -534,6 +541,24 @@ static const u8 aw8695_sine_waveform[] = {
 	0xaf, 0xae, 0xad, 0xac, 0xac, 0xac, 0xac, 0xad, 0xae, 0xaf, 0xb1, 0xb2,
 	0xb5, 0xb7, 0xba, 0xbd, 0xc0, 0xc3, 0xc7, 0xcb, 0xcf, 0xd3, 0xd8, 0xdc,
 	0xe1, 0xe6, 0xeb, 0xf0, 0xf5, 0xfa
+};
+
+/*
+ * AW8624: one period at the LRA's f0 (24 kHz / 117 = 205 Hz), stronger than the
+ * AW8695 table: round(120 * sin(2 * pi * x / 117)). The AW8624 has no boost, so
+ * the drive is all in the samples.
+ */
+static const u8 aw8624_sine_waveform[] = {
+	0x00, 0x06, 0x0d, 0x13, 0x1a, 0x20, 0x26, 0x2c, 0x32, 0x38, 0x3d, 0x43,
+	0x48, 0x4d, 0x52, 0x57, 0x5b, 0x5f, 0x63, 0x66, 0x69, 0x6c, 0x6f, 0x71,
+	0x73, 0x75, 0x76, 0x77, 0x78, 0x78, 0x78, 0x77, 0x77, 0x76, 0x74, 0x72,
+	0x70, 0x6e, 0x6b, 0x68, 0x65, 0x61, 0x5d, 0x59, 0x54, 0x50, 0x4b, 0x45,
+	0x40, 0x3b, 0x35, 0x2f, 0x29, 0x23, 0x1d, 0x16, 0x10, 0x0a, 0x03, 0xfd,
+	0xf6, 0xf0, 0xea, 0xe3, 0xdd, 0xd7, 0xd1, 0xcb, 0xc5, 0xc0, 0xbb, 0xb5,
+	0xb0, 0xac, 0xa7, 0xa3, 0x9f, 0x9b, 0x98, 0x95, 0x92, 0x90, 0x8e, 0x8c,
+	0x8a, 0x89, 0x89, 0x88, 0x88, 0x88, 0x89, 0x8a, 0x8b, 0x8d, 0x8f, 0x91,
+	0x94, 0x97, 0x9a, 0x9d, 0xa1, 0xa5, 0xa9, 0xae, 0xb3, 0xb8, 0xbd, 0xc3,
+	0xc8, 0xce, 0xd4, 0xda, 0xe0, 0xe6, 0xed, 0xf3, 0xfa
 };
 
 /*
@@ -565,6 +590,24 @@ static const struct aw8695_sram_waveform_header sram_waveform_header = {
 		}
 	}
 };
+
+static const struct aw8695_sram_waveform_header aw8624_sram_waveform_header = {
+	.version = 0x01,
+	.waveform_address = {
+		{
+			.start_address = cpu_to_be16(AW8695_RAM_BASE_ADDR +
+				sizeof(struct aw8695_sram_waveform_header)),
+			.end_address = cpu_to_be16(AW8695_RAM_BASE_ADDR +
+				sizeof(struct aw8695_sram_waveform_header) +
+				ARRAY_SIZE(aw8624_sine_waveform) - 1),
+		}
+	}
+};
+
+static unsigned int aw8695_glb_state_reg(struct aw8695_data *haptics)
+{
+	return haptics->aw8624 ? AW8624_GLB_STATE : AW8695_GLB_STATE;
+}
 
 static int aw8695_interrupt_clear(struct aw8695_data *haptics)
 {
@@ -613,10 +656,12 @@ static int aw8695_set_work_mode(struct aw8695_data *haptics,
 			AW8695_SYSCTRL_PLAY_MODE_MASK, AW8695_SYSCTRL_PLAY_MODE_RAM);
 		if (err)
 			return err;
-		err = regmap_update_bits(haptics->regmap, AW8695_SYSCTRL,
-			AW8695_SYSCTRL_BST_MODE_MASK, AW8695_SYSCTRL_BST_MODE_BYPASS);
-		if (err)
-			return err;
+		if (!haptics->aw8624) {
+			err = regmap_update_bits(haptics->regmap, AW8695_SYSCTRL,
+				AW8695_SYSCTRL_BST_MODE_MASK, AW8695_SYSCTRL_BST_MODE_BYPASS);
+			if (err)
+				return err;
+		}
 		err = aw8695_haptic_set_active(haptics);
 		if (err)
 			return err;
@@ -653,6 +698,7 @@ static int aw8695_haptics_play(struct input_dev *dev, void *data,
 		level = effect->u.rumble.weak_magnitude;
 
 	haptics->running = level;
+	haptics->level = level;
 	schedule_work(&haptics->play_work);
 
 	return 0;
@@ -671,7 +717,7 @@ static int aw8695_haptics_stop(struct aw8695_data *haptics)
 	if (err)
 		return err;
 
-	err = regmap_read_poll_timeout(haptics->regmap, AW8695_GLB_STATE, read_buf,
+	err = regmap_read_poll_timeout(haptics->regmap, aw8695_glb_state_reg(haptics), read_buf,
 			(read_buf & 0x0f) == 0, 2000, 2000 * 100);
 	if (err) {
 		dev_err(dev, "Did not enter standby: %d\n", err);
@@ -709,6 +755,17 @@ static int aw8695_haptics_start(struct aw8695_data *haptics)
 		AW8695_WAVLOOP1_SEQ2_MASK, 0x0);
 	if (err)
 		return err;
+
+	/*
+	 * AW8624: the rumble magnitude is the strength (feedbackd scales it by
+	 * its max-haptic-strength setting), as RAM playback gain.
+	 */
+	if (haptics->aw8624) {
+		err = regmap_write(haptics->regmap, AW8624_DATDBG,
+				   max(1U, DIV_ROUND_UP((u32)haptics->level * AW8624_GAIN_FULL, 0xffff)));
+		if (err)
+			return err;
+	}
 
 	/* Configure for RAM mode */
 	err = aw8695_set_work_mode(haptics, AW8695_RAM_MODE);
@@ -1014,6 +1071,7 @@ static int aw8695_init(struct aw8695_data *haptics)
 			AW8624_CHIPID, AW8695_CHIPID, read_buf);
 		return -ENODEV;
 	}
+	haptics->aw8624 = read_buf == AW8624_CHIPID;
 
 	err = regmap_write(haptics->regmap, AW8695_ID, AW8695_RESET);
 	if (err) {
@@ -1070,6 +1128,16 @@ static int aw8695_init(struct aw8695_data *haptics)
 		AW8695_PWMDBG_PWM_MODE_MASK, AW8695_PWMDBG_PWM_24K);
 	if (err)
 		return err;
+
+	/*
+	 * The rest is the AW8695's boost, analog trim and f0 calibration. On the
+	 * AW8624 these addresses are other registers (0x36 is ANADBG1 there, and
+	 * it has no boost): written, they left the chip in under-voltage lockout,
+	 * dropping back to standby the moment it was made active, so it never
+	 * vibrated. Its power-on defaults play the RAM waveform as they are.
+	 */
+	if (haptics->aw8624)
+		return 0;
 
 	err = regmap_write(haptics->regmap, AW8695_BSTDBG1, haptics->boost_debug[0]);
 	if (err)
@@ -1173,7 +1241,7 @@ static int aw8695_ram_init(struct aw8695_data *haptics)
 		return err;
 
 	/* Write waveform header */
-	ptr = (unsigned char *) &sram_waveform_header;
+	ptr = (unsigned char *) (haptics->aw8624 ? &aw8624_sram_waveform_header : &sram_waveform_header);
 	for (i = 0; i < sizeof(sram_waveform_header); i++) {
 		err = regmap_write(haptics->regmap, AW8695_RAMDATA,
 			ptr[i]);
@@ -1182,9 +1250,9 @@ static int aw8695_ram_init(struct aw8695_data *haptics)
 	}
 
 	/* Write waveform data */
-	for (i = 0; i < ARRAY_SIZE(aw8695_sine_waveform); i++) {
+	for (i = 0; i < (haptics->aw8624 ? ARRAY_SIZE(aw8624_sine_waveform) : ARRAY_SIZE(aw8695_sine_waveform)); i++) {
 		err = regmap_write(haptics->regmap, AW8695_RAMDATA,
-			aw8695_sine_waveform[i]);
+			haptics->aw8624 ? aw8624_sine_waveform[i] : aw8695_sine_waveform[i]);
 		if (err)
 			return err;
 	}
