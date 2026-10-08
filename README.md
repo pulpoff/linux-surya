@@ -101,6 +101,12 @@ Status of the cameras:
 * **Shared PHYs.** Sensors that share a CSIPHY get mutable links (only the first is enabled), so
   libcamera can switch between them.
 * **Debug cleanup.** The bring-up debug module parameters and trace prints are removed.
+* **A failed stream start no longer breaks every camera.** When one stage failed to start, the
+  stages already started stayed marked as streaming, and since all four cameras share CSID0/VFE0,
+  every later start was silently skipped until a reboot. The started stages are now stopped again.
+* **The main camera's lens driver (DW9807) stays quiet while the sensor is off.** It used to send
+  dozens of writes into a powered-down lens, seconds of bus timeouts that broke the IMX682's own
+  start. Switching between all four cameras now works reliably.
 
 ### New drivers
 

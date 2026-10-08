@@ -44,6 +44,13 @@ struct dw9807_device {
 	struct v4l2_subdev sd;
 	struct regulator *vcc;
 	u16 current_val;
+	/*
+	 * false while the lens does not answer (its I2C side is powered by the
+	 * sensor, which may be off). Then nothing else is sent, so a closed
+	 * camera costs one bus timeout, not a few seconds of them on the bus the
+	 * sensor needs for its own start.
+	 */
+	bool online;
 };
 
 static inline struct dw9807_device *sd_to_dw9807_vcm(
@@ -119,7 +126,14 @@ static int dw9807_set_ctrl(struct v4l2_ctrl *ctrl)
 	if (ctrl->id == V4L2_CID_FOCUS_ABSOLUTE) {
 		struct i2c_client *client = v4l2_get_subdevdata(&dev_vcm->sd);
 
+		const char on[2] = { DW9807_CTL_ADDR, 0x00 };
+
 		dev_vcm->current_val = ctrl->val;
+		if (!dev_vcm->online) {
+			if (i2c_master_send(client, on, sizeof(on)) < 0)
+				return 0;	/* still unreachable: keep the value for later */
+			dev_vcm->online = true;
+		}
 		return dw9807_set_dac(client, ctrl->val);
 	}
 
@@ -266,6 +280,10 @@ static int __maybe_unused dw9807_vcm_suspend(struct device *dev)
 	const char tx_data[2] = { DW9807_CTL_ADDR, 0x01 };
 	int ret, val;
 
+	if (!dw9807_dev->online)
+		return regulator_disable(dw9807_dev->vcc);
+	dw9807_dev->online = false;
+
 	for (val = dw9807_dev->current_val & ~(DW9807_CTRL_STEPS - 1);
 	     val >= 0; val -= DW9807_CTRL_STEPS) {
 		ret = dw9807_set_dac(client, val);
@@ -300,10 +318,14 @@ static int  __maybe_unused dw9807_vcm_resume(struct device *dev)
 	if (ret)
 		return ret;
 
-	/* Power on */
+	/* Power on. If the lens does not answer, leave it until a focus write */
 	ret = i2c_master_send(client, tx_data, sizeof(tx_data));
-	if (ret < 0)
-		dev_err_once(&client->dev, "I2C write CTL fail ret = %d\n", ret);
+	if (ret < 0) {
+		dev_dbg(&client->dev, "lens not reachable yet: %d\n", ret);
+		dw9807_dev->online = false;
+		return 0;
+	}
+	dw9807_dev->online = true;
 
 	for (val = dw9807_dev->current_val % DW9807_CTRL_STEPS;
 	     val < dw9807_dev->current_val + DW9807_CTRL_STEPS - 1;
