@@ -53,6 +53,16 @@ Charging: USB-C power delivery
   example by a temperature-guarded service. 9 V PD needs driver work. The 33 W fast charging
   uses an external charge pump with no mainline driver.
 
+Wi-Fi: 5 GHz channels
+---------------------
+
+* **`ath.regdomain=<country>`**, a new module option. The phone's Wi-Fi calibration names China
+  (CN). On top of that, for any country in the calibration, the ath driver first applied its most
+  restrictive world table, which leaves out 5 GHz channels 100-144 permanently. Networks on those
+  channels were invisible. The option replaces the calibration's country with the one the phone is
+  used in, and starts from a table covering all of 2.4 GHz and 5 GHz up to 5875 MHz, so that
+  country's rules decide. Set it with `options ath regdomain=DE` in `/etc/modprobe.d/`.
+
 Cameras: CAMSS and sensors
 --------------------------
 

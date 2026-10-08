@@ -18,12 +18,24 @@
 
 #include <linux/kernel.h>
 #include <linux/export.h>
+#include <linux/moduleparam.h>
+#include <linux/ctype.h>
 #include <net/cfg80211.h>
 #include <net/mac80211.h>
 #include "regd.h"
 #include "regd_common.h"
 
 static int __ath_regd_init(struct ath_regulatory *reg);
+
+/*
+ * Some boards carry a calibration file whose EEPROM regdomain names a country the device is not
+ * used in (Xiaomi's POCO X3 NFC: CN, which disables 5 GHz channels 100-144). This lets the owner
+ * name the country the device is actually operated in, e.g. ath.regdomain=DE.
+ */
+static char *regdomain;
+module_param(regdomain, charp, 0444);
+MODULE_PARM_DESC(regdomain, "ISO 3166 alpha2 country to use instead of the EEPROM's (e.g. DE)");
+static bool regdomain_overridden;
 
 /*
  * This is a set of common rules used by our world regulatory domains.
@@ -80,6 +92,20 @@ static const struct ieee80211_regdomain ath_world_regdom_63_65 = {
 		ATH_2GHZ_CH01_11,
 		ATH_2GHZ_CH12_13,
 		ATH_5GHZ_NO_MIDBAND,
+	}
+};
+
+/*
+ * Base for ath.regdomain: every 2.4 GHz channel and the whole 5 GHz band up to 5875 MHz,
+ * passive scan only. The country named by the owner then decides what is actually allowed.
+ */
+static const struct ieee80211_regdomain ath_override_base_regdom = {
+	.n_reg_rules = 5,
+	.alpha2 =  "99",
+	.reg_rules = {
+		ATH_2GHZ_ALL,
+		ATH_5GHZ_5150_5350,
+		REG_RULE(5470-10, 5865+10, 80, 0, 30, NL80211_RRF_NO_IR),
 	}
 };
 
@@ -657,6 +683,15 @@ ath_regd_init_wiphy(struct ath_regulatory *reg,
 		 * cfg80211's but we enable passive scanning.
 		 */
 		regd = ath_default_world_regdomain();
+		/*
+		 * The default world regdomain skips the 5 GHz mid band
+		 * (5470-5725 MHz), and channels it leaves out stay disabled
+		 * for good. When the owner named the country, start from the
+		 * world rules that include it (passive scan everywhere) and
+		 * let that country's rules decide.
+		 */
+		if (regdomain_overridden)
+			regd = &ath_override_base_regdom;
 	}
 
 	wiphy_apply_custom_regulatory(wiphy, regd);
@@ -699,6 +734,22 @@ static int __ath_regd_init(struct ath_regulatory *reg)
 
 	regdmn = ath_regd_get_eepromRD(reg);
 	reg->country_code = ath_regd_get_default_country(regdmn);
+
+	if (regdomain && strlen(regdomain) == 2) {
+		char alpha2[2] = { toupper(regdomain[0]), toupper(regdomain[1]) };
+		u16 cc = ath_regd_find_country_by_name(alpha2);
+
+		if (cc != (u16)-1) {
+			pr_info("regdomain=%c%c overrides the EEPROM country\n",
+				alpha2[0], alpha2[1]);
+			reg->current_rd = COUNTRY_ERD_FLAG | cc;
+			reg->country_code = cc;
+			regdmn = cc;
+			regdomain_overridden = true;
+		} else {
+			pr_warn("regdomain=%s is not a known country, ignored\n", regdomain);
+		}
+	}
 
 	if (reg->country_code == CTRY_DEFAULT &&
 	    regdmn == CTRY_DEFAULT) {
