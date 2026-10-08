@@ -1780,8 +1780,25 @@ static int imx682_probe(struct i2c_client *client)
 		goto error_mutex_destroy;
 	}
 
-	/* Check module identity */
-	ret = imx682_detect(imx682);
+	/*
+	 * Check module identity. The first read can hit a timeout on the CCI
+	 * bus it shares with the DW9800 lens, and a failed probe here leaves
+	 * CAMSS without every camera (it waits for all sensors), so power-cycle
+	 * the sensor and try again.
+	 */
+	for (int tries = 3; ; ) {
+		ret = imx682_detect(imx682);
+		if (!ret || !--tries)
+			break;
+		dev_warn(imx682->dev, "sensor id read: %d, power-cycling and retrying\n", ret);
+		imx682_power_off(imx682->dev);
+		msleep(50);
+		ret = imx682_power_on(imx682->dev);
+		if (ret) {
+			dev_err(imx682->dev, "failed to power-on the sensor");
+			goto error_mutex_destroy;
+		}
+	}
 	if (ret) {
 		dev_err(imx682->dev, "failed to find sensor: %d", ret);
 		goto error_power_off;

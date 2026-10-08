@@ -147,8 +147,8 @@ The front and ultrawide sensors share CSIPHY1 through a board switch (pm6150 GPI
 Known issues
 ------------
 
-* **IMX682 probe can fail at boot** (`-EIO`, DW9800 NACK). CAMSS waits for every sensor, so all
-  cameras disappear. Unbinding and rebinding the IMX682 I2C device recovers them.
+* **IMX682 probe at boot:** a bus timeout during its chip id read used to fail the probe, and with it
+  every camera (CAMSS waits for all sensors). The probe now power-cycles the sensor and retries.
 * **Untested:** headset microphone and headphone output.
 * **Camera image quality:** no libcamera tuning yet.
 
