@@ -16,6 +16,7 @@
 #include <linux/compat.h>
 #include <linux/elf.h>
 #include <linux/init.h>
+#include <linux/of.h>
 #include <linux/kernel.h>
 #include <linux/personality.h>
 #include <linux/preempt.h>
@@ -219,6 +220,27 @@ static const char *const compat_hwcap2_str[] = {
 };
 #endif /* CONFIG_COMPAT */
 
+/*
+ * arm64 prints no "model name": userspace (GNOME Settings' About page through libgtop, for one) then shows no
+ * processor at all. A board can name it in its device tree, /cpus { cpu-model-name = "..."; }.
+ */
+static const char *dt_cpu_model_name(void)
+{
+	static const char *name;
+	static bool looked;
+	struct device_node *cpus;
+
+	if (!looked) {
+		looked = true;
+		cpus = of_find_node_by_path("/cpus");
+		if (cpus) {
+			of_property_read_string(cpus, "cpu-model-name", &name);
+			of_node_put(cpus);
+		}
+	}
+	return name;
+}
+
 static int c_show(struct seq_file *m, void *v)
 {
 	int j;
@@ -236,6 +258,8 @@ static int c_show(struct seq_file *m, void *v)
 	if (compat)
 		seq_printf(m, "model name\t: ARMv8 Processor rev %d (%s)\n",
 			   MIDR_REVISION(midr), COMPAT_ELF_PLATFORM);
+	else if (dt_cpu_model_name())
+		seq_printf(m, "model name\t: %s\n", dt_cpu_model_name());
 
 	seq_printf(m, "BogoMIPS\t: %lu.%02lu\n",
 		   loops_per_jiffy / (500000UL/HZ),

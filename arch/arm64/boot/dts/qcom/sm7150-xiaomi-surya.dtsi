@@ -927,3 +927,8 @@
 &wifi {
 	qcom,ath10k-calibration-variant = "xiaomi_surya";
 };
+
+/* the POCO X3 NFC's SoC by its marketing name, for /proc/cpuinfo's "model name" (arm64 cpuinfo.c) */
+&{/cpus} {
+	cpu-model-name = "Qualcomm Snapdragon 732G";
+};

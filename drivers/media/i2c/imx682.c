@@ -1786,13 +1786,17 @@ static int imx682_probe(struct i2c_client *client)
 	 * CAMSS without every camera (it waits for all sensors), so power-cycle
 	 * the sensor and try again.
 	 */
-	for (int tries = 3; ; ) {
+	for (int tries = 10; ; ) {
 		ret = imx682_detect(imx682);
 		if (!ret || !--tries)
 			break;
+		/*
+		 * At boot the sensor can stay unreachable for well over the 0.4 s three quick tries took (build #14
+		 * failed all three; a rebind seconds later always worked): up to ten tries over about 2 s.
+		 */
 		dev_warn(imx682->dev, "sensor id read: %d, power-cycling and retrying\n", ret);
 		imx682_power_off(imx682->dev);
-		msleep(50);
+		msleep(tries > 7 ? 100 : 300);
 		ret = imx682_power_on(imx682->dev);
 		if (ret) {
 			dev_err(imx682->dev, "failed to power-on the sensor");
