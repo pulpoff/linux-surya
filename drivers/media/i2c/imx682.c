@@ -1321,12 +1321,25 @@ static int imx682_start_streaming(struct imx682 *imx682)
 	const struct imx682_reg_list *reg_list;
 	int ret;
 
-	/* Write global settings */
-	ret = imx682_write_regs(imx682, imx682_init_regs,
-				ARRAY_SIZE(imx682_init_regs));
-	if (!ret)
-		ret = imx682_write_regs(imx682, imx682_init_regs2,
-					ARRAY_SIZE(imx682_init_regs2));
+	int tries = 3;
+
+	/*
+	 * Write global settings. The CCI bus is shared with the DW9800 lens,
+	 * and a timeout there resets the master under a transfer in flight, so
+	 * a failed write is retried: the tables only set registers and can be
+	 * written again from the start.
+	 */
+	do {
+		ret = imx682_write_regs(imx682, imx682_init_regs,
+					ARRAY_SIZE(imx682_init_regs));
+		if (!ret)
+			ret = imx682_write_regs(imx682, imx682_init_regs2,
+						ARRAY_SIZE(imx682_init_regs2));
+		if (ret && --tries) {
+			dev_warn(imx682->dev, "init registers: %d, retrying\n", ret);
+			msleep(20);
+		}
+	} while (ret && tries);
 	if (ret) {
 		dev_err(imx682->dev, "fail to write init registers");
 		return ret;

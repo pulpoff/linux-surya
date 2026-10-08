@@ -311,33 +311,16 @@ static int  __maybe_unused dw9807_vcm_resume(struct device *dev)
 	struct i2c_client *client = to_i2c_client(dev);
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct dw9807_device *dw9807_dev = sd_to_dw9807_vcm(sd);
-	const char tx_data[2] = { DW9807_CTL_ADDR, 0x00 };
-	int ret, val;
 
-	ret = regulator_enable(dw9807_dev->vcc);
-	if (ret)
-		return ret;
-
-	/* Power on. If the lens does not answer, leave it until a focus write */
-	ret = i2c_master_send(client, tx_data, sizeof(tx_data));
-	if (ret < 0) {
-		dev_dbg(&client->dev, "lens not reachable yet: %d\n", ret);
-		dw9807_dev->online = false;
-		return 0;
-	}
-	dw9807_dev->online = true;
-
-	for (val = dw9807_dev->current_val % DW9807_CTRL_STEPS;
-	     val < dw9807_dev->current_val + DW9807_CTRL_STEPS - 1;
-	     val += DW9807_CTRL_STEPS) {
-		ret = dw9807_set_dac(client, val);
-		if (ret)
-			dev_err_ratelimited(dev, "%s I2C failure: %d",
-						__func__, ret);
-		usleep_range(DW9807_CTRL_DELAY_US, DW9807_CTRL_DELAY_US + 10);
-	}
-
-	return 0;
+	/*
+	 * Only the supply here. The lens is opened together with the camera,
+	 * before the sensor that powers its I2C side is on, so a write now
+	 * times out, and that timeout on the shared CCI bus breaks the sensor's
+	 * own start. The lens is powered up over I2C by the first focus write
+	 * (dw9807_set_ctrl), when the sensor streams.
+	 */
+	dw9807_dev->online = false;
+	return regulator_enable(dw9807_dev->vcc);
 }
 
 static const struct of_device_id dw9807_of_table[] = {
