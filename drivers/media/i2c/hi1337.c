@@ -1614,7 +1614,7 @@ static const struct cci_reg_sequence hi1337_4208x3120_regs[] = {
 	{ CCI_REG16(0x160e), 0x0d80 },
 };
 /* 2104x1560 RAW10 (2x2 binning), 4 lanes, 30.2 fps (pixel rate 288 MHz, link 360 MHz) */
-static const struct cci_reg_sequence hi1337_2104x1560_regs[] = {
+static const struct cci_reg_sequence __maybe_unused hi1337_2104x1560_regs[] = {
 	{ CCI_REG16(0x0b00), 0x0000 },
 	{ CCI_REG16(0x0204), 0x0200 },
 	{ CCI_REG16(0x0206), 0x02d0 },
@@ -1728,14 +1728,24 @@ static const struct hi1337_mode hi1337_modes[] = {
 		.pixel_rate = 576000000, .link_freq_index = 0,
 		.regs = hi1337_4208x3120_regs, .num_regs = ARRAY_SIZE(hi1337_4208x3120_regs),
 	},
+	/*
+	 * 2104x1560 (binned, 360 MHz link) streams but its frames arrive with
+	 * horizontal bands of shifted Bayer phase and garbled lines. Until that is
+	 * understood only the full mode is offered: the ISP scales it down, and
+	 * it holds 30 fps.
+	 */
+#if 0
 	{
 		.width = 2104, .height = 1560, .hts = 2880, .vts = 3311,
 		.pixel_rate = 288000000, .link_freq_index = 1,
 		.regs = hi1337_2104x1560_regs, .num_regs = ARRAY_SIZE(hi1337_2104x1560_regs),
 	},
+#endif
 };
 
 struct hi1337 {
+	/* set while probing: wait for the shared CSIPHY1 mux instead of failing at once */
+	bool probing;
 	struct device *dev;
 	struct v4l2_subdev sd;
 	struct media_pad pad;
@@ -2006,7 +2016,16 @@ static int hi1337_power_on(struct device *dev)
 	int ret;
 
 	if (hi1337->mux) {
-		ret = mux_control_try_select(hi1337->mux, HI1337_MUX_STATE);
+		/*
+		 * The front and ultrawide sensors share CSIPHY1 through the CAM_SEL
+		 * mux, and both power up at probe to read their chip id. The one that
+		 * probes second waits for the other to power down (autosuspend, ~1 s)
+		 * instead of failing, which would leave CAMSS without every sensor.
+		 */
+		int tries = hi1337->probing ? 30 : 1;
+
+		while ((ret = mux_control_try_select(hi1337->mux, HI1337_MUX_STATE)) == -EBUSY && --tries)
+			msleep(100);
 		if (ret) {
 			dev_err(dev, "CSIPHY1 mux busy (the front camera is on): %d\n", ret);
 			return ret;
@@ -2135,7 +2154,9 @@ static int hi1337_probe(struct i2c_client *client)
 	if (ret)
 		return dev_err_probe(hi1337->dev, ret, "getting the supplies\n");
 
+	hi1337->probing = true;
 	ret = hi1337_power_on(hi1337->dev);
+	hi1337->probing = false;
 	if (ret)
 		return ret;
 

@@ -73,7 +73,7 @@ Status of the cameras:
 | Main       | Sony IMX682 + DW9800 VCM  | CSIPHY0, C-PHY                              | working |
 | Front      | Samsung S5K3T2            | CSIPHY1, D-PHY, behind the CAM_SEL mux      | working |
 | Macro      | SK Hynix Hi-259           | CSIPHY2, combo mode (data lane 2, clock 3)  | working |
-| Ultrawide  | SK Hynix Hi-1337          | CSIPHY1, behind the CAM_SEL mux             | streams 4208x3120 @ 30 fps |
+| Ultrawide  | SK Hynix Hi-1337          | CSIPHY1, behind the CAM_SEL mux             | working (full 4208x3120 mode only) |
 | Depth      | OmniVision OV02B1B        |                                             | no driver |
 
 ### CAMSS: every SM7150 CSIPHY needs `csiphy0_clk`
@@ -113,6 +113,12 @@ Status of the cameras:
 * **`media: i2c: hi1337`:** SK Hynix Hi-1337, the 13 MP ultrawide, at 4208x3120 and 2104x1560.
   The register tables are written with `cci_multi_reg_write()`. `regmap_multi_reg_write()` on
   the 8-bit CCI regmap dropped the 16-bit width, so only the low byte of each entry went out.
+* **Front and ultrawide no longer knock each other out at boot.** Both sensors share CSIPHY1 and
+  power up at probe to read their chip id. The one that probed second found the shared switch busy,
+  failed, and took every camera with it, because CAMSS waits for all sensors. A probe now waits up
+  to 3 s for the switch.
+* **Hi-1337 offers only its full 4208x3120 mode.** The binned 2104x1560 mode delivered frames with
+  bands of shifted colour and garbled lines. The software ISP scales the full mode down at 30 fps.
 * **`media: i2c: imx682`, `media: i2c: s5k3t2`:** the main and front sensors, from
   [woodyst/surya-pmos](https://github.com/woodyst/surya-pmos).
 * **`media: dw9807-vcm`:** the main camera's DW9800 actuator gets its vcc (coil) supply. I2C errors

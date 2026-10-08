@@ -160,6 +160,8 @@ static const char * const s5k3t2_supply_names[] = {
  * @mutex: Mutex for serializing sensor controls
  */
 struct s5k3t2 {
+	/* set while probing: wait for the shared CSIPHY1 mux instead of failing at once */
+	bool probing;
 	struct device *dev;
 	struct i2c_client *client;
 	struct v4l2_subdev sd;
@@ -1206,7 +1208,16 @@ static int s5k3t2_power_on(struct device *dev)
 	 * release it last.
 	 */
 	if (s5k3t2->mux) {
-		ret = mux_control_try_select(s5k3t2->mux, 0);
+		/*
+		 * The front and ultrawide sensors share CSIPHY1 through the CAM_SEL
+		 * mux, and both power up at probe to read their chip id. The one that
+		 * probes second waits for the other to power down (autosuspend, ~1 s)
+		 * instead of failing, which would leave CAMSS without every sensor.
+		 */
+		int tries = s5k3t2->probing ? 30 : 1;
+
+		while ((ret = mux_control_try_select(s5k3t2->mux, 0)) == -EBUSY && --tries)
+			msleep(100);
 		if (ret) {
 			dev_err(dev, "CSIPHY1 mux busy (the ultrawide camera is on): %d\n", ret);
 			return ret;
@@ -1406,7 +1417,9 @@ static int s5k3t2_probe(struct i2c_client *client)
 
 	mutex_init(&s5k3t2->mutex);
 
+	s5k3t2->probing = true;
 	ret = s5k3t2_power_on(s5k3t2->dev);
+	s5k3t2->probing = false;
 	if (ret) {
 		dev_err(s5k3t2->dev, "failed to power-on the sensor");
 		goto error_mutex_destroy;
