@@ -73,6 +73,19 @@ Vibration: AW8624 haptics
 * Pulses closer than about 150 ms apart blur together: the motor keeps ringing for that long after
   each pulse.
 
+Status LED and GPS
+------------------
+
+* **Status LED works.** The white LED above the screen is driven by the PM6150L LPG as
+  `white:status` (0-511), with the kernel's pattern trigger. The pattern trigger ramps between
+  points, so it fades in and out on its own (`echo "0 1200 511 1200 0 2600 0 0" > pattern` breathes).
+  feedbackd's udev rule puts it on that trigger and gives its group the pattern file.
+* **GPS works.** The modem's GNSS receiver (GPS, GLONASS and others, behind QMI LOC) reports
+  satellites through ModemManager and geoclue. The kernel side was already in place (the PD mapper
+  registers the modem's `gps_service`). What blocked it was in the modem: it comes up with its GNSS
+  engine locked, and every start fails with QMI LOC `GeneralError` (46). Clearing the lock once per boot
+  is enough: `qmicli -d qrtr://0 -p --loc-set-engine-lock=none`.
+
 Wi-Fi: 5 GHz channels
 ---------------------
 
