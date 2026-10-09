@@ -165,7 +165,8 @@ static irqreturn_t q6v5_handover_interrupt(int irq, void *data)
 	struct qcom_q6v5 *q6v5 = data;
 
 	if (q6v5->handover_issued) {
-		dev_err(q6v5->dev, "Handover signaled, but it already happened\n");
+		/* the ADSP of SM7150 toggles its ready and handover bits ~4 times a second while its sensors stream */
+		dev_dbg_ratelimited(q6v5->dev, "Handover signaled, but it already happened\n");
 		return IRQ_HANDLED;
 	}
 
