@@ -48,6 +48,10 @@ Charging: USB-C power delivery
   sent a hard reset about 30 ms later and dropped VBUS, and charging kept starting and stopping.
   The port is now dual-role (`try-power-role = "sink"`) with a 5 V / 3 A sink PDO, and PD chargers
   hold a 5 V contract.
+* **USB data ports charge too.** On a standard downstream port (a hub, a computer) the charger ran in USB
+  500 mA mode and ignored the programmed input limit, so the phone drew 480 mA, less than it uses with the
+  screen on, and slowly emptied while it read "Charging". Above 500 mA the driver now sets the ICL override so
+  the programmed limit applies; AICL still lowers the current if the port's voltage sags. On a hub: 1.48 A in.
 * **Limits:** the device tree keeps the charger input at 1.5 A, and the driver fixes the battery
   charge current at 1.95 A. The input limit (`current_max`) can be raised from userspace, for
   example by a temperature-guarded service. 9 V PD needs driver work. The 33 W fast charging

@@ -493,6 +493,7 @@ static inline int smb_get_current_now(struct smb_chip *chip,
 static int smb_set_current_limit(struct smb_chip *chip, unsigned int val)
 {
 	unsigned char val_raw;
+	int rc;
 
 	if (val > chip->current_limit_max_ua) {
 		dev_err(chip->dev,
@@ -501,8 +502,19 @@ static int smb_set_current_limit(struct smb_chip *chip, unsigned int val)
 	}
 	val_raw = val / chip->current_step_size_ua;
 
-	return regmap_write(chip->regmap, chip->base + USBIN_CURRENT_LIMIT_CFG,
-			    val_raw);
+	rc = regmap_write(chip->regmap, chip->base + USBIN_CURRENT_LIMIT_CFG,
+			  val_raw);
+	if (rc)
+		return rc;
+
+	/*
+	 * On a standard USB port (SDP) the charger runs in USB 500 mA mode and ignores the
+	 * programmed limit. Above 500 mA, override that mode so the limit applies; AICL still
+	 * backs the input current off if the port's voltage sags.
+	 */
+	return regmap_update_bits(chip->regmap, chip->base + CMD_ICL_OVERRIDE,
+				  ICL_OVERRIDE_BIT,
+				  val > SDP_CURRENT_UA ? ICL_OVERRIDE_BIT : 0);
 }
 
 static void smb_status_change_work(struct work_struct *work)
