@@ -53,6 +53,14 @@
 /* Group hold register */
 #define S5K3T2_REG_HOLD		0x0104
 
+/*
+ * Global digital gain (SMIA), 0x0100 = 1x. libcamera's software ISP drives only
+ * the analogue gain within a 30 fps frame and left the front camera far too
+ * dark indoors: a fixed 4x gives it the headroom (8x brought out column lines and noise).
+ */
+#define S5K3T2_REG_DGAIN	0x020e
+#define S5K3T2_DGAIN_FIXED	0x0400
+
 /* Input clock rate */
 #define S5K3T2_INCLK_RATE	19200000
 
@@ -981,6 +989,19 @@ static int s5k3t2_start_streaming(struct s5k3t2 *s5k3t2)
 	if (ret) {
 		dev_err(s5k3t2->dev, "fail to setup handler");
 		return ret;
+	}
+
+	/*
+	 * SMIA has one digital gain per colour filter position (0x020e Gr,
+	 * 0x0210 R, 0x0212 B, 0x0214 Gb): only Gr set left the picture a
+	 * green and magenta grid on the S5K3T2.
+	 */
+	for (u16 reg = S5K3T2_REG_DGAIN; reg <= S5K3T2_REG_DGAIN + 6; reg += 2) {
+		ret = s5k3t2_write_reg(s5k3t2, reg, 2, S5K3T2_DGAIN_FIXED);
+		if (ret) {
+			dev_err(s5k3t2->dev, "fail to set the digital gain");
+			return ret;
+		}
 	}
 
 	/* Start streaming */

@@ -142,6 +142,17 @@ Status of the cameras:
   lens now only switches on its supply. It is first addressed on a focus write, while streaming.
 * **The IMX682 retries its init writes** (up to three times) when the shared bus hiccups. Switching
   between all four cameras in GNOME Snapshot works reliably (30/30 in a stress test).
+* **Bright enough indoors with libcamera's software ISP.** Its auto exposure drives only the
+  analogue gain, within the 30 fps frame, and at their maximum every camera stayed far too dark in
+  an evening room. The sensors get a fixed digital gain on all four colour filter positions (SMIA
+  `0x020e`-`0x0214` on the IMX682 and S5K3T2, `0x0214`-`0x021a` on the Hi-1337): 4x main, 4x
+  front, about 16x ultrawide. The auto exposure lowers the analogue gain and the exposure itself in
+  bright light. The Hi-259 macro's analogue gain goes up to 14x (MediaTek's driver stops at 8x;
+  the gain code allows about 15x). Setting only `0x020e`, the green-next-to-red position, left the
+  front camera a green and magenta grid.
+* **Hi-1337 Bayer order is GBRG.** Declared GRBG, as on the Hi-847, red and blue came out swapped:
+  a yellow floor and red objects turned blue, and the software ISP's white balance flickered
+  between teal and neutral.
 
 ### New drivers
 

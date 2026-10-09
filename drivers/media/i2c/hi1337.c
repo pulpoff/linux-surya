@@ -32,6 +32,16 @@
 #define HI1337_REG_EXPOSURE		CCI_REG16(0x020a)	/* in lines */
 #define HI1337_REG_FLL			CCI_REG16(0x020e)	/* frame length in lines */
 #define HI1337_REG_ANALOG_GAIN		CCI_REG16(0x0212)	/* gain = 1 + value / 16 */
+/*
+ * Per-channel digital gains (Gr, Gb, R, B), 0x0200 = 1x. libcamera's software ISP
+ * drives only the analogue gain (16x at most here) within a 30 fps frame and left
+ * the ultrawide far too dark indoors: a fixed ~16x (the register maximum) on all four gives it the headroom.
+ */
+#define HI1337_REG_DGAIN_GR		CCI_REG16(0x0214)
+#define HI1337_REG_DGAIN_GB		CCI_REG16(0x0216)
+#define HI1337_REG_DGAIN_R		CCI_REG16(0x0218)
+#define HI1337_REG_DGAIN_B		CCI_REG16(0x021a)
+#define HI1337_DGAIN_FIXED		0x1fff
 #define HI1337_REG_ISP			CCI_REG16(0x0b04)
 #define HI1337_ISP_TPG_EN		BIT(0)
 #define HI1337_REG_TEST_PATTERN		CCI_REG16(0x0c0a)
@@ -1882,7 +1892,7 @@ static void hi1337_fill_format(const struct hi1337_mode *m, struct v4l2_mbus_fra
 	memset(fmt, 0, sizeof(*fmt));
 	fmt->width = m->width;
 	fmt->height = m->height;
-	fmt->code = MEDIA_BUS_FMT_SGRBG10_1X10;	/* as the Hi-847 */
+	fmt->code = MEDIA_BUS_FMT_SGBRG10_1X10;	/* GBRG: as GRBG (the Hi-847) red and blue came out swapped */
 	fmt->field = V4L2_FIELD_NONE;
 	fmt->colorspace = V4L2_COLORSPACE_RAW;
 	fmt->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
@@ -1905,6 +1915,10 @@ static int hi1337_enable_streams(struct v4l2_subdev *sd, struct v4l2_subdev_stat
 	cci_multi_reg_write(hi1337->regmap, hi1337->mode->regs, hi1337->mode->num_regs, &ret);
 	if (!ret)
 		ret = __v4l2_ctrl_handler_setup(&hi1337->ctrls);
+	cci_write(hi1337->regmap, HI1337_REG_DGAIN_GR, HI1337_DGAIN_FIXED, &ret);
+	cci_write(hi1337->regmap, HI1337_REG_DGAIN_GB, HI1337_DGAIN_FIXED, &ret);
+	cci_write(hi1337->regmap, HI1337_REG_DGAIN_R, HI1337_DGAIN_FIXED, &ret);
+	cci_write(hi1337->regmap, HI1337_REG_DGAIN_B, HI1337_DGAIN_FIXED, &ret);
 	if (!ret)
 		cci_write(hi1337->regmap, HI1337_REG_MODE_SELECT, 0x0100, &ret);
 	if (ret) {
@@ -1930,14 +1944,14 @@ static int hi1337_enum_mbus_code(struct v4l2_subdev *sd, struct v4l2_subdev_stat
 {
 	if (code->index)
 		return -EINVAL;
-	code->code = MEDIA_BUS_FMT_SGRBG10_1X10;
+	code->code = MEDIA_BUS_FMT_SGBRG10_1X10;
 	return 0;
 }
 
 static int hi1337_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 				  struct v4l2_subdev_frame_size_enum *fse)
 {
-	if (fse->index >= ARRAY_SIZE(hi1337_modes) || fse->code != MEDIA_BUS_FMT_SGRBG10_1X10)
+	if (fse->index >= ARRAY_SIZE(hi1337_modes) || fse->code != MEDIA_BUS_FMT_SGBRG10_1X10)
 		return -EINVAL;
 	fse->min_width = fse->max_width = hi1337_modes[fse->index].width;
 	fse->min_height = fse->max_height = hi1337_modes[fse->index].height;

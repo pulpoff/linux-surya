@@ -49,6 +49,16 @@
 #define IMX682_AGAIN_STEP	1
 #define IMX682_AGAIN_DEFAULT	0
 
+/*
+ * Global digital gain, 0x0100 = 1x. libcamera's software ISP drives only the
+ * analogue gain and keeps the exposure within the 30 fps frame, and at its
+ * maximum the picture of an evening room stayed at a quarter of the stock
+ * camera's brightness: a fixed 4x gives the auto exposure that headroom (it
+ * lowers the analogue gain again in bright light).
+ */
+#define IMX682_REG_DGAIN	0x020e
+#define IMX682_DGAIN_FIXED	0x0400
+
 /* Group hold register */
 #define IMX682_REG_HOLD		0x0104
 
@@ -1358,6 +1368,19 @@ static int imx682_start_streaming(struct imx682 *imx682)
 	if (ret) {
 		dev_err(imx682->dev, "fail to setup handler");
 		return ret;
+	}
+
+	/*
+	 * SMIA has one digital gain per colour filter position (0x020e Gr,
+	 * 0x0210 R, 0x0212 B, 0x0214 Gb): only Gr set left the picture a
+	 * green and magenta grid on the S5K3T2.
+	 */
+	for (u16 reg = IMX682_REG_DGAIN; reg <= IMX682_REG_DGAIN + 6; reg += 2) {
+		ret = imx682_write_reg(imx682, reg, 2, IMX682_DGAIN_FIXED);
+		if (ret) {
+			dev_err(imx682->dev, "fail to set the digital gain");
+			return ret;
+		}
 	}
 
 	/* Start streaming */

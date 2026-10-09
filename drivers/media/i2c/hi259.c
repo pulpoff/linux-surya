@@ -44,9 +44,13 @@
 #define HI259_MCLK			19200000
 #define HI259_EXPOSURE_MARGIN		4
 
-/* V4L2 analogue gain in 1/64 steps: 64 = 1x .. 512 = 8x (MediaTek BASEGAIN convention) */
+/*
+ * V4L2 analogue gain in 1/64 steps, 64 = 1x (MediaTek BASEGAIN convention). MediaTek stops at 8x (code 30),
+ * but the code goes down to 0 (about 15x): the macro camera stayed far too dark indoors with libcamera's
+ * software ISP, so up to 14x (code 2). The auto exposure only goes there when the picture is dark.
+ */
 #define HI259_GAIN_MIN			64
-#define HI259_GAIN_MAX			512
+#define HI259_GAIN_MAX			896
 
 static const s64 hi259_link_freqs[] = { HI259_LINK_FREQ };
 
@@ -854,7 +858,7 @@ static int hi259_set_ctrl(struct v4l2_ctrl *ctrl)
 		hi259_write_page(hi259, 0x00, HI259_REG_GROUP_HOLD, 0x00, &ret);
 		break;
 	case V4L2_CID_ANALOGUE_GAIN:
-		/* gain2reg(): code = (256 * 64 / gain - 17) * 2, 478 at 1x .. 30 at 8x */
+		/* gain2reg(): code = (256 * 64 / gain - 17) * 2, 478 at 1x .. 30 at 8x .. 2 at 14x */
 		code = (256 * 64 / ctrl->val - 17) * 2;
 		hi259_write_page(hi259, 0x00, HI259_REG_GROUP_HOLD, 0x01, &ret);
 		hi259_write_page(hi259, 0x20, HI259_REG_GAIN_H, code >> 1, &ret);
