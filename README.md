@@ -2,7 +2,9 @@ Linux 7.2.9 for the POCO X3 NFC (surya)
 =======================================
 
 Mainline Linux for the Xiaomi POCO X3 NFC (codename surya, Snapdragon 732G / SM7150).
-It runs on the phone under postmarketOS with GNOME.
+It runs the phone on **Mobian** (Debian sid with Mobian's staging repository) with Phosh, GNOME's mobile
+shell, and the [Neo launcher](https://github.com/pulpoff/neo-gnome). It is not a postmarketOS kernel: it is built
+as a Debian package (`make bindeb-pkg`) and installed with dpkg like any other Debian kernel.
 
 The tree is stable **v7.2.9**, plus the SM7150 work of
 [sm7150-mainline/linux](https://github.com/sm7150-mainline/linux) (branch `v7.2`), plus the
