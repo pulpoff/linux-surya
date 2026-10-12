@@ -204,6 +204,8 @@ Booting: U-Boot
 The phone boots Xiaomi's ABL → U-Boot → systemd-boot → this kernel. A ready-to-flash U-Boot, its build inputs
 and the steps are in [`u-boot/`](u-boot/README.md): `fastboot flash boot u-boot/u-boot-surya.img`. It boots
 quietly over the POCO logo and expects the system as a disk image (ESP + root) in the `userdata` partition.
+It works on both panel variants: it reads the panel ABL reports and loads the matching device tree from the ESP
+(`/dtb/qcom/sm7150-xiaomi-surya-huaxing.dtb` or `-tianma.dtb`), so one system image boots either phone.
 
 Building
 --------

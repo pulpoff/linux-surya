@@ -10,6 +10,26 @@ Boot chain: Xiaomi's ABL → U-Boot (an Android boot image in the `boot` partiti
     sha256sum -c SHA256SUMS
     fastboot flash boot u-boot-surya.img
 
+One image for both panels
+-------------------------
+
+The POCO X3 NFC is sold with a **Huaxing** or a **Tianma** panel, and Linux needs the matching device tree
+(panel driver and touch firmware). This U-Boot picks it by itself:
+
+1. It reads the panel name ABL puts on its command line, `msm_drm.dsi_display0=` (a Huaxing phone reports
+   `dsi_nt36672c_huaxing_fhd_video_display`).
+2. A name containing `tianma` or `huaxing` sets `fdtfile=qcom/sm7150-xiaomi-surya-<panel>.dtb`.
+3. `bootefi bootmgr` loads **`/dtb/${fdtfile}` from the ESP** and hands it to the EFI loader (systemd-boot).
+   Put both device trees from this kernel there, and leave the `devicetree` line out of the boot entry:
+
+       ESP/dtb/qcom/sm7150-xiaomi-surya-huaxing.dtb
+       ESP/dtb/qcom/sm7150-xiaomi-surya-tianma.dtb
+
+4. With an unknown panel name or no file there, the device tree built into U-Boot (Huaxing) is used.
+
+Linux can see what was picked: `/proc/device-tree/chosen/u-boot,abl-panel` and `u-boot,fdtfile`.
+Tested on a Huaxing phone; the Tianma path is untested so far (reports welcome).
+
 What it needs on the phone
 --------------------------
 
@@ -34,20 +54,21 @@ Source: [sm7150-mainline/u-boot](https://github.com/sm7150-mainline/u-boot) at `
   shell.
 * **`CONFIG_BLKMAP`**, which `qcom_defconfig` lacks and the `preboot` above needs. Without it every boot stops
   at "press any key to continue".
+* **Panel detection** (`build/0002-snapdragon-panel-from-abl-picks-the-dtb.patch` and `select_panel_dtb` in
+  `build/qcom-phone-quiet.env`), as described above.
 * **The logo.** A small white Debian swirl is centred under the POCO logo, instead of the U-Boot logo in the top
   right corner (`build/u_boot_logo.bmp`: 100x100, 8-bit grey palette, uncompressed, and
   `build/0001-video-centre-the-logo.patch`).
 
-The device tree inside is `sm7150-xiaomi-surya-huaxing.dtb`. U-Boot only needs it for the panel's framebuffer
-and the buttons, and the Linux device tree is chosen separately on the ESP. The image also boots phones with the
-Tianma panel (untested).
+The device tree built into U-Boot is `sm7150-xiaomi-surya-huaxing.dtb`. U-Boot only uses it for the framebuffer
+(already set up by ABL, the same on both panels) and the buttons, so the same image runs on both panels.
 
 Build
 -----
 
     # inside this directory, so that ../build is the build/ folder here
     git clone https://github.com/sm7150-mainline/u-boot src && cd src && git checkout f8c04469
-    git apply ../build/0001-video-centre-the-logo.patch
+    git apply ../build/0001-video-centre-the-logo.patch ../build/0002-snapdragon-panel-from-abl-picks-the-dtb.patch
     cp ../build/u_boot_logo.bmp drivers/video/u_boot_logo.bmp
     cp ../build/qcom-phone-quiet.env ../build/qcom-quiet.config board/qualcomm/   # next to qcom-phone.config
     make O=.output CROSS_COMPILE=aarch64-linux-gnu- qcom_defconfig qcom-phone.config qcom-quiet.config

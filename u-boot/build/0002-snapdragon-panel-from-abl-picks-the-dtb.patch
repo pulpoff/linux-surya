@@ -1,0 +1,82 @@
+diff --git a/arch/arm/mach-snapdragon/board.c b/arch/arm/mach-snapdragon/board.c
+index 5fb3240a..3b09de98 100644
+--- a/arch/arm/mach-snapdragon/board.c
++++ b/arch/arm/mach-snapdragon/board.c
+@@ -378,6 +378,39 @@ void qcom_set_serialno(void)
+ 		env_set("serial#", serial);
+ }
+ 
++/*
++ * neo: the panel ABL found, from its command line (msm_drm.dsi_display0=<name>[:config]),
++ * as the "panel" environment variable. Devices sold with more than one panel (the POCO X3 NFC:
++ * Huaxing or Tianma) pick their kernel DTB from it in the environment. ABL writes the command
++ * line into the FDT it hands over; the built-in one is read as a fallback.
++ */
++static void qcom_set_panel(void)
++{
++	const void *ext = (const void *)get_prev_bl_fdt_addr();
++	const char *cmdline = NULL;
++	char panel[64];
++	char *colon;
++	int node;
++
++	if (ext && !fdt_check_header(ext)) {
++		node = fdt_path_offset(ext, "/chosen");
++		if (node >= 0)
++			cmdline = fdt_getprop(ext, node, "bootargs", NULL);
++	}
++	if (!cmdline || !strstr(cmdline, "msm_drm.dsi_display0="))
++		cmdline = get_cmdline();
++	if (!cmdline)
++		return;
++
++	panel[0] = '\0';
++	get_cmdline_option(cmdline, "msm_drm.dsi_display0=", panel, sizeof(panel) - 1);
++	colon = strchr(panel, ':');
++	if (colon)
++		*colon = '\0';
++	if (panel[0] != '\0')
++		env_set("panel", panel);
++}
++
+ /* Sets up the "board", and "soc" environment variables as well as constructing the devicetree
+  * path, with a few quirks to handle non-standard dtb filenames. This is not meant to be a
+  * comprehensive solution to automatically picking the DTB, but aims to be correct for the
+@@ -487,6 +520,7 @@ static void configure_env(void)
+ 	env_set("fdtfile", dt_path);
+ 
+ 	qcom_set_serialno();
++	qcom_set_panel();
+ }
+ 
+ void qcom_show_boot_source(void)
+diff --git a/arch/arm/mach-snapdragon/of_fixup.c b/arch/arm/mach-snapdragon/of_fixup.c
+index eec2c0c7..17f8eb80 100644
+--- a/arch/arm/mach-snapdragon/of_fixup.c
++++ b/arch/arm/mach-snapdragon/of_fixup.c
+@@ -21,6 +21,7 @@
+ #include <dt-bindings/input/linux-event-codes.h>
+ #include <dm/of_access.h>
+ #include <dm/of.h>
++#include <env.h>
+ #include <event.h>
+ #include <fdt_support.h>
+ #include <linux/errno.h>
+@@ -167,5 +168,17 @@ EVENT_SPY_FULL(EVT_OF_LIVE_BUILT, qcom_of_fixup_nodes);
+ 
+ int ft_board_setup(void __maybe_unused *blob, struct bd_info __maybe_unused *bd)
+ {
++	/* neo: tell the OS which panel ABL reported and which DTB that chose */
++	const char *panel = env_get("panel");
++	int node;
++
++	if (panel) {
++		node = fdt_find_or_add_subnode(blob, 0, "chosen");
++		if (node >= 0) {
++			fdt_setprop_string(blob, node, "u-boot,abl-panel", panel);
++			if (env_get("fdtfile"))
++				fdt_setprop_string(blob, node, "u-boot,fdtfile", env_get("fdtfile"));
++		}
++	}
+ 	return 0;
+ }
