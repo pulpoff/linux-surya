@@ -1,0 +1,31 @@
+diff --git a/drivers/video/video-uclass.c b/drivers/video/video-uclass.c
+index 53641fc2..ff1beca0 100644
+--- a/drivers/video/video-uclass.c
++++ b/drivers/video/video-uclass.c
+@@ -16,6 +16,9 @@
+ #include <spl.h>
+ #include <stdio_dev.h>
+ #include <video.h>
++#include <splash.h>
++#include <asm/unaligned.h>
++#include <bmp_layout.h>
+ #include <video_console.h>
+ #include <asm/cache.h>
+ #include <asm/global_data.h>
+@@ -597,7 +600,15 @@ static int show_splash(struct udevice *dev)
+ 	u8 *data = SPLASH_START(u_boot_logo);
+ 	int ret;
+ 
+-	ret = video_bmp_display(dev, map_to_sysmem(data), -4, 4, true);
++	/* yesman/poco: a small gray gear centred horizontally, 200 px below the middle (under the POCO logo) */
++	{
++		struct video_priv *vpriv = dev_get_uclass_priv(dev);
++		struct bmp_image *bmp = (struct bmp_image *)data;
++		int h = get_unaligned_le32(&bmp->header.height);
++		int y = (vpriv->ysize - h) / 2 + 200;
++
++		ret = video_bmp_display(dev, map_to_sysmem(data), BMP_ALIGN_CENTER, y, true);
++	}
+ 
+ 	return 0;
+ }

@@ -198,6 +198,13 @@ Known issues
 * **Untested:** headset microphone and headphone output.
 * **Camera image quality:** no libcamera tuning yet.
 
+Booting: U-Boot
+---------------
+
+The phone boots Xiaomi's ABL → U-Boot → systemd-boot → this kernel. A ready-to-flash U-Boot, its build inputs
+and the steps are in [`u-boot/`](u-boot/README.md): `fastboot flash boot u-boot/u-boot-surya.img`. It boots
+quietly over the POCO logo and expects the system as a disk image (ESP + root) in the `userdata` partition.
+
 Building
 --------
 
@@ -208,9 +215,13 @@ Cross-compile for arm64 with the SM7150 config fragment and the drivers above:
         -m REGULATOR_WL2866D -m VIDEO_QCOM_CAMSS -m VIDEO_HI259 -m VIDEO_HI1337 \
         -m VIDEO_IMX682 -m VIDEO_S5K3T2 -m VIDEO_DW9807_VCM \
         -m SND_SOC_WCD937X -m SND_SOC_WCD937X_SDW -m SND_SOC_TAS2562 \
-        -e TOUCHSCREEN_NT36XXX_SPI
+        -e TOUCHSCREEN_NT36XXX_SPI \
+        -e ANDROID_BINDER_IPC --set-str ANDROID_BINDER_DEVICES binder,hwbinder,vndbinder -e PSI
     make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out olddefconfig
     make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out -j$(nproc) vmlinuz.efi dtbs modules
+
+The binder devices and PSI are for Waydroid (Android apps as windows): it uses the legacy `/dev/binder`,
+`/dev/hwbinder` and `/dev/vndbinder` (no binderfs), and Android's low-memory killer runs on PSI.
 
 There are two device trees, one per display panel. Pick the one that matches your phone:
 
