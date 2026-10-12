@@ -30,6 +30,26 @@ The POCO X3 NFC is sold with a **Huaxing** or a **Tianma** panel, and Linux need
 Linux can see what was picked: `/proc/device-tree/chosen/u-boot,abl-panel` and `u-boot,fdtfile`.
 Tested on a Huaxing phone; the Tianma path is untested so far (reports welcome).
 
+Which panel does my phone have?
+-------------------------------
+
+Xiaomi's bootloader puts the panel's name on the kernel command line at every boot
+(`msm_drm.dsi_display0=…`). A Huaxing phone reports `dsi_nt36672c_huaxing_fhd_video_display`. A Tianma
+phone should report the same with `tianma` in it (not yet confirmed: please report it if you have one).
+
+* **From Lineage recovery** (the easiest: recovery's adb shell runs as root), with the phone on a PC:
+
+      adb shell "cat /proc/cmdline | tr ' ' '\n' | grep dsi_display0"
+
+* **From Android, rooted** (Magisk): the same through `adb shell su -c "…"`, or in a terminal app after `su`.
+* **From Android, not rooted:** Android 10 and later usually refuse `/proc/cmdline` to the adb user. Some ROMs
+  copy the panel name into a property (`adb shell getprop | grep -i -E "panel|lcd|display"`), and hardware-info
+  apps sometimes show it; neither is checked on surya. Recovery is the reliable way.
+* **On Linux booted by this U-Boot:** it records what it detected and which device tree it picked:
+
+      cat /proc/device-tree/chosen/u-boot,abl-panel; echo
+      cat /proc/device-tree/chosen/u-boot,fdtfile; echo
+
 What it needs on the phone
 --------------------------
 

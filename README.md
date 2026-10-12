@@ -205,7 +205,8 @@ The phone boots Xiaomi's ABL → U-Boot → systemd-boot → this kernel. A read
 and the steps are in [`u-boot/`](u-boot/README.md): `fastboot flash boot u-boot/u-boot-surya.img`. It boots
 quietly over the POCO logo and expects the system as a disk image (ESP + root) in the `userdata` partition.
 It works on both panel variants: it reads the panel ABL reports and loads the matching device tree from the ESP
-(`/dtb/qcom/sm7150-xiaomi-surya-huaxing.dtb` or `-tianma.dtb`), so one system image boots either phone.
+(`/dtb/qcom/sm7150-xiaomi-surya-huaxing.dtb` or `-tianma.dtb`), so one system image boots either phone. How to find out which panel a phone has (from recovery, Android or
+Linux) is in the [U-Boot README](u-boot/README.md#which-panel-does-my-phone-have).
 
 Building
 --------
