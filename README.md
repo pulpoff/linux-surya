@@ -28,6 +28,26 @@ Audio: WCD9375 codec, microphones and earpiece
 * **TAS2562 speaker amp:** Digital Volume range and MSB-first writes.
 * **Quieter logs:** the q6afe/SoundWire debug prints are toned down.
 
+Modem calls: audio both ways
+----------------------------
+
+* **q6voice.** On a GSM/LTE call the ADSP mixes the audio itself (MVM, CVS and CVP over APR); the host
+  only starts the AFE ports and the voice processor. The q6voice drivers come from
+  [sdm845-mainline](https://gitlab.com/sdm845-mainline/linux), with the CVD 2.3 set-up SM7150 needs (detected
+  from the CVP version), the codec DMA ports, a zeroed command buffer and the start moved from startup to
+  prepare. The device tree adds the APR services and a hostless VoiceMMode1 link, PCM 4 (`hw:0,4`), which
+  `q6voiced` opens for every call.
+* **Routing** is in UCM: a "Voice Call" verb (earpiece or speaker, bottom mic) that callaudiod selects,
+  plus `TERT_MI2S_RX Voice Mixer VoiceMMode1` and `VoiceMMode1 Capture Mixer TX_CODEC_DMA_TX_3` at boot.
+* **The uplink needs a running mono capture.** The far end hears nothing until a 1-channel capture
+  actually runs on the mic's AFE port (TX_CODEC_DMA_TX_3) alongside the call; a 2-channel one, or one only
+  prepared, does not do it. The image runs one on MultiMedia3 for the length of every call
+  (`surya-call-uplink`, in the Neo tree).
+* `q6cvp` module options: `tx_channels`, `rx_channels`, `sample_rate`, and `mono_channel` (1 = FL, the
+  default; downstream says FC). The TX topology is the `VoiceMMode1 TX Topology` control. Its kernel
+  default, single-mic echo/noise suppression (0x10F71), sends the far end silence without Xiaomi's
+  calibration; the image's UCM sets no processing (0x10F70, 69488) at boot.
+
 Touchscreen and display
 -----------------------
 
@@ -237,6 +257,8 @@ Credits
 * **[sm7150-mainline](https://github.com/sm7150-mainline/linux):** the SM7150 platform and surya
   bring-up (Danila Tikhonov, Jens/Aelin Reidel, David Wronek, Luca Weiss and others). WCD9375
   audio for davinci by Artem Hutsaliuk (PR #60).
+* **[sdm845-mainline](https://gitlab.com/sdm845-mainline/linux):** the q6voice drivers (Stephan Gerhold,
+  Vincent Knecht, Joel Selvaraj, Otto Pflüger) and their CVD 2.3 sequence (Richard Acayan).
 * **[woodyst/surya-pmos](https://github.com/woodyst/surya-pmos):** IMX682 / S5K3T2 drivers,
   C-PHY, the DW9807 fixes, refgen/rails/384 MHz.
 * **[asidko/qcom-camss-mainline](https://github.com/asidko/qcom-camss-mainline):** the VFE

@@ -1,4 +1,4 @@
-List of maintainers
+ist of maintainers
 ===================
 
 Descriptions of section entries and preferred order
@@ -29853,3 +29853,13 @@ S:	Buried alive in reporters
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
 F:	*
 F:	*/
+
+M:	Avoid Warnings <dev@null.cz>
+S:	Unmaintained
+F:	include/dt-bindings/sound/qcom,q6voice.h
+F:	sound/soc/qcom/qdsp6/q6cvs.c
+F:	sound/soc/qcom/qdsp6/q6cvp.c
+F:	sound/soc/qcom/qdsp6/q6mvm.c
+F:	sound/soc/qcom/qdsp6/q6voice.c
+F:	sound/soc/qcom/qdsp6/q6voice-common.c
+F:	sound/soc/qcom/qdsp6/q6voice-dai.c

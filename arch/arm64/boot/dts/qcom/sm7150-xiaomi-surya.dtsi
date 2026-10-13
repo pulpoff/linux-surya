@@ -7,6 +7,7 @@
 /dts-v1/;
 
 #include <dt-bindings/media/video-interfaces.h>
+#include <dt-bindings/sound/qcom,q6voice.h>
 #include "sm7150-xiaomi-common.dtsi"
 
 / {
@@ -138,6 +139,25 @@
 
 			codec {
 				sound-dai = <&tas2562 0>, <&tas2564 0>;
+			};
+		};
+
+		/*
+		 * Modem call audio: a hostless frontend on the Q6 voice
+		 * services. The DSP mixes the call itself; opening this PCM
+		 * (both directions, 8 kHz mono, never started) only starts the
+		 * backends it is routed to with the "VoiceMMode1 Capture Mixer"
+		 * and "<port> Voice Mixer" controls, which then carry the call.
+		 *
+		 * It is the fifth link on purpose: PCM numbers follow the link
+		 * order, and q6voiced opens hw:0,4. Keep it here (or change
+		 * q6voiced's argument) when links are added or moved.
+		 */
+		voicemmode1-dai-link {
+			link-name = "VoiceMMode1";
+
+			cpu {
+				sound-dai = <&q6voicedai VOICEMMODE1>;
 			};
 		};
 
@@ -711,6 +731,24 @@
 
 	dai@2 {
 		reg = <MSM_FRONTEND_DAI_MULTIMEDIA3>;
+	};
+};
+
+&q6cvp {
+	status = "okay";
+};
+
+&q6cvs {
+	status = "okay";
+};
+
+&q6mvm {
+	status = "okay";
+};
+
+&q6voicedai {
+	dai@1 {
+		reg = <VOICEMMODE1>;
 	};
 };
 

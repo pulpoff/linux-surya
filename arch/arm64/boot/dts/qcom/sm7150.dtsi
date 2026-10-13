@@ -2626,6 +2626,48 @@
 							#sound-dai-cells = <0>;
 						};
 					};
+
+					/*
+					 * Voice services for modem calls (out-of-tree q6voice
+					 * driver). Left disabled here: a board enables them
+					 * together with a VoiceMMode1 dai-link.
+					 */
+					q6mvm: service@9 {
+						compatible = "qcom,q6mvm";
+						reg = <APR_SVC_ADSP_MVM>;
+
+						qcom,protection-domain = "avs/audio",
+									 "msm/adsp/audio_pd";
+
+						status = "disabled";
+
+						q6voicedai: dais {
+							compatible = "qcom,q6voice-dais";
+							#address-cells = <1>;
+							#size-cells = <0>;
+							#sound-dai-cells = <1>;
+						};
+					};
+
+					q6cvs: service@a {
+						compatible = "qcom,q6cvs";
+						reg = <APR_SVC_ADSP_CVS>;
+
+						qcom,protection-domain = "avs/audio",
+									 "msm/adsp/audio_pd";
+
+						status = "disabled";
+					};
+
+					q6cvp: service@b {
+						compatible = "qcom,q6cvp";
+						reg = <APR_SVC_ADSP_CVP>;
+
+						qcom,protection-domain = "avs/audio",
+									 "msm/adsp/audio_pd";
+
+						status = "disabled";
+					};
 				};
 
 				fastrpc {
