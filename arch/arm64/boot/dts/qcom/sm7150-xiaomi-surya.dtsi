@@ -818,10 +818,18 @@
 		 * Master ports start at 2 because the sm7150 TX controller has
 		 * one dout port (hence the leading 0xff in swr2's qcom,ports-*
 		 * arrays). Twelve channels: adc1, adc2, adc3, dmic0, dmic1,
-		 * mbhc, dmic2..dmic7. Identical to davinci.
+		 * mbhc, dmic2..dmic7.
+		 *
+		 * ADC2 (codec port 2, the top mic AMIC3) gets master port 3 as
+		 * its channel 1, not channel 2 of ADC1's port 2: the TX macro
+		 * reads master port 3 as its "SWR_ADC2" lane, which is where
+		 * the DAPM routes (and the stock ROM's TX SMIC MUX ADC2) expect
+		 * it. With <2 2 3 4> both codec ports took the same offset in
+		 * port 2: the top mic never arrived, and with both ADCs on the
+		 * bottom mic turned to full-scale noise.
 		 */
-		qcom,tx-port-mapping = <2 2 3 4>;
-		qcom,tx-channel-mapping = /bits/ 8 <1 2 1 1 2 3 3 4 1 2 3 4>;
+		qcom,tx-port-mapping = <2 3 4 5>;
+		qcom,tx-channel-mapping = /bits/ 8 <1 1 1 1 2 3 3 4 1 2 3 4>;
 	};
 };
 
